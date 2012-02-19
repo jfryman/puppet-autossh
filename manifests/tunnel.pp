@@ -44,6 +44,7 @@ define autossh::tunnel (
       ensure  => file,
       mode    => '0755',
       require => Class['autossh::package'],
+      content => template('autossh/autossh-tunnel.erb'),
       notify => Service["autossh-tunnel-${name}"],
     }
     service { "autossh-tunnel-${name}":
