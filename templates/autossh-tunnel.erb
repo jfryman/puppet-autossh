@@ -1,0 +1,169 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          autossh-tunnel-<%= name %>
+# Required-Start:    $local_fs $remote_fs $network
+# Required-Stop:     $local_fs $remote_fs $network
+# Should-Start:      $syslog
+# Should-Stop:       $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Autossh tunnel <%= name %>
+# Description:       Maintain an SSH tunnel between two hosts.
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+USERNAME=<%= user %>
+
+DESC="secure tunnel"
+NAME=autossh-tunnel-<%= name %>
+REAL_NAME=autossh
+DAEMON=$(which $REAL_NAME)
+PIDFILE="/var/run/autossh-tunnel-<%= name %>.pid"
+SCRIPTNAME=/etc/init.d/$NAME
+
+. /lib/lsb/init-functions
+
+#
+# AutoSSH configuration
+#
+AUTOSSH_ARGS="-M <%= real_monitor_port %> -N -L <%= bind_address %>:<%= port %>:<%= host %>:<%= hostport %> <%= ssh_extra_options %> <%= real_remote_user %>@<%= remote_host %>"
+<% if gatetime != 'absent' -%>
+AUTOSSH_GATETIME=<%= gatetime %>
+<% end -%>
+<% if first_poll != 'absent' -%>
+AUTOSSH_FIRST_POLL=<%= first_poll %>
+<% end -%>
+<% if poll != 'absent' -%>
+AUTOSSH_POLL=<%= poll %>
+<% end -%>
+<% if maxstart != 'absent' -%>
+AUTOSSH_MAXSTART=<%= maxstart %>
+<% end -%>
+<% if maxlifetime != 'absent' -%>
+AUTOSSH_MAXLIFETIME=<%= maxlifetime %>
+<% end -%>
+<% if logfile != 'absent' -%>
+AUTOSSH_LOGFILE=<%= logfile %>
+<% end -%>
+
+# Exit if the package is not installed
+[ -x "$DAEMON" ] || exit 0
+
+#
+# Function that starts the daemon/service
+#
+do_start()
+{
+    # Export the autossh configuration
+    if [ -n "$AUTOSSH_GATETIME" ]; then
+          export AUTOSSH_GATETIME
+    fi
+    if [ -n "$AUTOSSH_FIRST_POLL" ]; then
+          export AUTOSSH_FIRST_POLL
+    fi
+    if [ -n "$AUTOSSH_POLL" ]; then
+          export AUTOSSH_POLL
+    fi
+    if [ -n "$AUTOSSH_MAXSTART" ]; then
+          export AUTOSSH_MAXSTART
+    fi
+    if [ -n "$AUTOSSH_MAXLIFETIME" ]; then
+          export AUTOSSH_MAXLIFETIME
+    fi
+    if [ -n "$AUTOSSH_LOGFILE" ]; then
+          export AUTOSSH_LOGFILE
+    fi
+
+    # Return
+    #   0 if daemon has been started
+    #   1 if daemon was already running
+    #   2 if daemon could not be started
+    pidofproc -p "$PIDFILE" "$DAEMON" >/dev/null && return 1
+    start-stop-daemon --chuid $USERNAME --start --pidfile $PIDFILE --make-pidfile \
+            --exec $DAEMON --background -- $AUTOSSH_ARGS \
+            || return 2
+
+    # if autossh was started but bad arguments were passed to ssh, autossh will 
+    # return 0 but exit after a few seconds, so we wait just a bit to make sure
+    # everything is ok
+    sleep 5
+    pidofproc -p "$PIDFILE" "$DAEMON" >/dev/null || return 2    
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+        # Return
+        #   0 if daemon has been stopped
+        #   1 if daemon was already stopped
+        #   2 if daemon could not be stopped
+        #   other if a failure occurred
+        start-stop-daemon --stop --quiet --retry=TERM/10/KILL/5 --pidfile $PIDFILE --name $REAL_NAME
+        RETVAL="$?"
+        [ "$RETVAL" = 2 ] && return 2
+
+        # Wait for children to finish too if this is a daemon that forks
+        # and if the daemon is only ever run from this initscript.
+        # If the above conditions are not satisfied then add some other code
+        # that waits for the process to drop all resources that could be
+        # needed by services started subsequently.  A last resort is to
+        # sleep for some time.
+
+        start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
+        [ "$?" = 2 ] && return 2
+
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+
+        return "$RETVAL"
+}
+
+case "$1" in
+  start)
+        log_daemon_msg "Starting $DESC" "$NAME"
+        do_start
+        case "$?" in
+                0) log_end_msg 0 ;;
+                1) log_progress_msg "was already running" && log_end_msg 0 ;;
+                *) log_end_msg 1 ;; # Failed to start
+        esac
+        ;;
+  stop)
+        log_daemon_msg "Stopping $DESC" "$NAME"
+        do_stop
+        case "$?" in
+                0) log_end_msg 0 ;;
+                1) log_progress_msg "was already stopped" && log_end_msg 0 ;;
+                *) log_end_msg 1 ;; # Failed to stop
+        esac
+        ;;
+  restart|force-reload)
+        #
+        # If the "reload" option is implemented then remove the
+        # 'force-reload' alias
+        #
+        log_daemon_msg "Restarting $DESC" "$NAME"
+        do_stop
+        case "$?" in
+          0|1)
+                do_start
+                case "$?" in
+                    0) log_end_msg 0 ;;
+                    1) log_progress_msg "was already running" && log_end_msg 0 ;;
+                    *) log_end_msg 1 ;; # Failed to start
+                esac
+                ;;
+          *)
+                log_end_msg 1 ;;
+        esac
+        ;;
+  status)
+        status_of_proc -p "$PIDFILE" "$DAEMON" $NAME && exit 0 || exit $?
+        ;;
+  *)
+        echo "Usage: $SCRIPTNAME {start|stop|restart|force-reload|status}" >&2
+        exit 3
+        ;;
+esac
