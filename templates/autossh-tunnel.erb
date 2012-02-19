@@ -26,7 +26,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 #
 # AutoSSH configuration
 #
-AUTOSSH_ARGS="-f -M <%= real_monitor_port %> -N -L <%= bind_address %>:<%= port %>:<%= host %>:<%= hostport %> <%= ssh_extra_options %> <%= real_remote_user %>@<%= remote_host %>"
+AUTOSSH_ARGS="-M <%= real_monitor_port %> -N -L <%= bind_address %>:<%= port %>:<%= host %>:<%= hostport %> <%= ssh_extra_options %> <%= real_remote_user %>@<%= remote_host %>"
 <% if gatetime != 'absent' -%>
 AUTOSSH_GATETIME=<%= gatetime %>
 <% end -%>
