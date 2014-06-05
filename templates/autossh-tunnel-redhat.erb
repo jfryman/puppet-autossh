@@ -1,0 +1,133 @@
+#!/bin/bash
+#
+# autossh-tunnel-<%= name %>        Control the named autossh tunnel
+#
+# chkconfig: 2345 55 25
+# description: Autossh maintains persistent SSH tunnels
+#
+# processname: autossh
+# pidfile: /var/run/autossh-tunnel-<%= name %>.pid
+
+### BEGIN INIT INFO
+# Provides: autossh-tunnel-<%= name %>
+# Required-Start: $local_fs $network $syslog
+# Required-Stop: $local_fs $syslog
+# Should-Start: $syslog
+# Should-Stop: $network $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Start up the named autossh tunnel
+# Description:       Autossh maintains persistent SSH tunnels
+#            This service starts up the named autossh instance daemon.
+### END INIT INFO
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+USERNAME=<%= user %>
+
+DESC="secure tunnel"
+NAME=autossh-tunnel-<%= name %>
+REAL_NAME=autossh
+DAEMON=$(which $REAL_NAME)
+PIDFILE="/var/run/autossh-tunnel-<%= name %>.pid"
+SCRIPTNAME=/etc/init.d/$NAME
+
+#
+# AutoSSH configuration
+#
+export AUTOSSH_PIDFILE=$pidfile
+
+AUTOSSH_ARGS="-f -M <%= real_monitor_port %> -N -L <%= bind_address %>:<%= port %>:<%= host %>:<%= hostport %> <%= ssh_extra_options %> <%= real_remote_user %>@<%= remote_host %> <%= ssh_remote_port %>"
+<% if gatetime != 'absent' -%>
+AUTOSSH_GATETIME=<%= gatetime %>
+<% end -%>
+<% if first_poll != 'absent' -%>
+AUTOSSH_FIRST_POLL=<%= first_poll %>
+<% end -%>
+<% if poll != 'absent' -%>
+AUTOSSH_POLL=<%= poll %>
+<% end -%>
+<% if maxstart != 'absent' -%>
+AUTOSSH_MAXSTART=<%= maxstart %>
+<% end -%>
+<% if maxlifetime != 'absent' -%>
+AUTOSSH_MAXLIFETIME=<%= maxlifetime %>
+<% end -%>
+<% if logfile != 'absent' -%>
+AUTOSSH_LOGFILE=<%= logfile %>
+<% end -%>
+
+# Exit if the package is not installed
+[ -x "$DAEMON" ] || exit 0
+
+start() 
+{
+    touch $PIDFILE
+    chown $USERNAME $PIDFILE
+
+    export AUTOSSH_PIDFILE="${PIDFILE}"
+
+    # Export the autossh configuration
+    if [ -n "$AUTOSSH_GATETIME" ]; then
+          export AUTOSSH_GATETIME
+    fi
+    if [ -n "$AUTOSSH_FIRST_POLL" ]; then
+          export AUTOSSH_FIRST_POLL
+    fi
+    if [ -n "$AUTOSSH_POLL" ]; then
+          export AUTOSSH_POLL
+    fi
+    if [ -n "$AUTOSSH_MAXSTART" ]; then
+          export AUTOSSH_MAXSTART
+    fi
+    if [ -n "$AUTOSSH_MAXLIFETIME" ]; then
+          export AUTOSSH_MAXLIFETIME
+    fi
+    if [ -n "$AUTOSSH_LOGFILE" ]; then
+          export AUTOSSH_LOGFILE
+    fi
+
+    # Return
+    #   0 if daemon has been started
+    #   1 if daemon was already running
+    #   2 if daemon could not be started
+    pidofproc -p "$PIDFILE" "$DAEMON" >/dev/null && return 1
+
+    daemon --user $USERNAME --pidfile $PIDFILE $DAEMON $AUTOSSH_ARGS || return 2
+
+    # if autossh was started but bad arguments were passed to ssh, autossh will 
+    # return 0 but exit after a few seconds, so we wait just a bit to make sure
+    # everything is ok
+    sleep 5
+    pidofproc -p "$PIDFILE" "$DAEMON" >/dev/null || return 2    
+}
+
+stop()
+{
+    killproc -p $PIDFILE $DAEMON
+}
+
+restart()
+{
+    stop
+    start
+}
+
+case "$1" in
+    start)
+        start
+        RETVAL=$?
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart}"
+        RETVAL=2
+esac
+exit $RETVAL
