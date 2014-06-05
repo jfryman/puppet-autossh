@@ -6,6 +6,7 @@ define autossh::tunnel (
   $host         = 'localhost',
   $hostport,
   $remote_host,
+  $remote_port  = '22',
   $remote_user  = 'absent',
   $monitor_port = 'absent',
   $gatetime     = 'absent',
@@ -23,6 +24,8 @@ define autossh::tunnel (
     mode  => '0644',
   }
 
+  $ssh_remote_port = "-p ${remote_port}"
+  
   $real_remote_user = $remote_user ? {
       'absent' => $user,
       default => $remote_user,
@@ -40,11 +43,17 @@ define autossh::tunnel (
   }
 
   if ($ensure == 'present') {
+
+    $template = $::osfamily ? { 
+      'RedHat' => 'autossh/autossh-tunnel-redhat.erb',
+      default => 'autossh/autossh-tunnel.erb'
+    }
+
     file { "/etc/init.d/autossh-tunnel-${name}":
       ensure  => file,
       mode    => '0755',
       require => Class['autossh::package'],
-      content => template('autossh/autossh-tunnel.erb'),
+      content => template($template),
       notify => Service["autossh-tunnel-${name}"],
     }
     service { "autossh-tunnel-${name}":
